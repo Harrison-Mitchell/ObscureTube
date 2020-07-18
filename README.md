@@ -11,7 +11,7 @@ Generates a montage of [action-packed](https://github.com/Harrison-Mitchell/Inte
 	1. Downloads the video
 	2. Extracts the framerate
 	3. Extracts the size of each frame (as in bytes)
-	4. Finds the 1.5s window with the most action [(see `interestingness`)](https://github.com/Harrison-Mitchell/Interestingness)
+	4. Finds the 1.5s window with the most action (see [`interestingness`](https://github.com/Harrison-Mitchell/Interestingness))
 	5. Slices the full video to this 1.5s slice
 	6. Ensures the 1.5s slice has sufficient audio
 
@@ -36,5 +36,4 @@ Downloading 4dttNoJ5Vd8 > Sucking Frames > Finding Actionest 1.5s > Writing Slic
 ...
 Downloading 4LSWnekuXSE > Sucking Frames > Finding Actionest 1.5s > Writing Slice > Saved
 Done! joined.mkv ready
-
 ```
