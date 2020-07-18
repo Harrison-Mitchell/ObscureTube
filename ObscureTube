@@ -1,0 +1,60 @@
+#!/bin/bash
+
+# Ensure search term passed and binaries exist
+if [ $# -eq 0 ]; then echo "Usage: $0 \"search term\"" && exit 1; fi
+if ! [ -x "$(command -v ffmpeg)" ]; then echo "Install ffmpeg" && exit 1; fi
+if ! [ -x "$(command -v youtube-dl)" ]; then echo "Install youtube-dl" && exit 1; fi
+if ! [ -x "$(command -v python3)" ]; then echo "Install python3" && exit 1; fi
+
+# Throw all test passing youtube ids into a file
+python3 scrape.py "$1" > ytids.txt
+
+# Remove junk from previous run
+mkdir -p out
+rm -f out/*.ts
+rm -f joined.mkv
+
+# Loop over each youtube id
+while read LINE
+do
+	# Download the youtube video for this id
+	echo -n "Downloading $LINE > "
+	youtube-dl -q --no-warnings -f mp4 "https://www.youtube.com/watch?v=$LINE" -o vid.mp4
+
+	# Get the framerate and then the size and type of each frame
+	echo -n "Sucking Frames > "
+	ffmpeg -i vid.mp4 2>&1 < /dev/null | sed -n "s/.*, \(.*\) fp.*/\1/p" > frames.csv
+	ffprobe -v warning -hide_banner -stats -i "vid.mp4" -select_streams v:0 -show_frames -show_entries frame=coded_picture_number,pict_type,pkt_size < /dev/null | cut -d "=" -f 2 | sed "s/\[FRAME\]//g" | sed "s/\[\/FRAME\]//g" | tr '\n' ',' | sed "s/,,,/\n/g" | sed "s/,,$//g" | sed "s/^,//g" | sort -t, -k3,3n >> frames.csv
+
+	# Finds the 1.5s of the video with the most action (based on I frame aggregation)
+	echo -n "Finding Actionest 1.5s > "
+	START=$(python3 moviestBit.py)
+
+	# Save that 1.5s to the out folder with the youtube id as the file name
+	echo -n "Writing Slice > "
+	vidname="out/$LINE.ts"
+	ffmpeg -nostats -loglevel 0 -y -i vid.mp4 -ss "$START" -t 1.5 "$vidname" < /dev/null
+
+	# Get the average volume and cull the video if it's not loud enough / not silent
+	meanvol=$(ffmpeg -nostats -i "$vidname" -af volumedetect -f null /dev/null < /dev/null 2>&1 | grep "mean_volume" | cut -d " " -f 5 | cut -d "." -f 1)
+	if (( "$meanvol" < "-30" )); then
+		echo "Too quiet, deleted."
+		rm "$vidname"
+	else
+		echo "Saved"
+	fi
+
+	# Remove the full youtube video, ready for the next run through
+	rm -f vid.mp4
+done < ytids.txt
+
+# Makes a file with a list of all out/ files, then zips them together with ffmpeg
+for f in out/*.ts; do echo "file '$f'" >> vids.txt; done
+ffmpeg -nostats -loglevel 0 -y -f concat -safe 0 -i vids.txt -vf "scale=1280:720:force_original_aspect_ratio=decrease,pad=1280:720:(ow-iw)/2:(oh-ih)/2" joined.mkv
+
+# Removes junk made during the process
+rm -f vids.txt
+rm -f frames.csv
+rm -f geckodriver.log
+
+echo "Done! joined.mkv ready"
